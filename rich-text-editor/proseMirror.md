@@ -62,7 +62,7 @@ let view = new EditorView(document.body, {state})
   - isTextblock: block节点，而且 inlineContent
   - isLeaf: 不允许嵌套子内容
 
-回顾一下 slatejs的基础[schema规范](https://docs.slatejs.org/concepts/11-normalizing#built-in-constraints)
+回顾一下 slatejs 的基础[schema规范](https://docs.slatejs.org/concepts/11-normalizing#built-in-constraints)
 
 1. All Element nodes must contain at least one Text descendant — even Void Elements. If an element node does not contain any children, an empty text node will be added as its only child. This constraint exists to ensure that the selection's anchor and focus points (which rely on referencing text nodes) can always be placed inside any node. With this, empty elements (or void elements) wouldn't be selectable. PS: Selection限制
 2. Two adjacent texts with the same custom properties will be merged. If two adjacent text nodes have the same formatting, they're merged into a single text node with a combined text string of the two. This exists to prevent the text nodes from only ever expanding in count in the document, since both adding and removing formatting results in splitting text nodes. PS: 确保唯一性以及节点数量
@@ -304,3 +304,89 @@ PS： 与 `slatejs` 不同的是扩展的 editor 属性也是不可变的，也�
 
 ### Editable DOM
 
+渲染调用 `node` 的 `toDOM` 函数，一样是依赖 `contenteditable` 处理
+
+### Dataflow
+
+和 slatejs 循环没啥区别
+
+DOM Event => Transaction => new EditorState => EditorView
+
+### Efficient Updating
+
+为了性能必然不是全量更新，每次更新时，`view` 可以同时访问新旧两个 `doc`, 通过比较获取需要更新的节点，ProseMirror 内部处理了这个工作。
+
+这个和 `slatejs` 类似，只更新 `dirtyPath` 中的内容。
+
+PS：`slatejs` 的视图层其实维护了 `matches: [key, path]` 表，更新 `key` 来刷新需要更新的 `DOM` 内容。逻辑层也自己维护了一套 `dirtyPath` 内容用于 `normalize`。
+
+### Props
+
+类似 React , ProseMirror 的 View 也有 `prop` 概念，既由上层传入并且控制的状态值，不可由组件自身修改。
+
+重复声明的 `prop` , 先声明的为准。`handler` 的函数，类似 slatejs ，返回 `true` 则结束，`false` 则延续给下一个函数。`attributes` 和 `decorations` 这类不冲突的函数自然是取并级。
+
+### Decorations
+
+有三种类型
+
+- Node decorations: add styling or other DOM attributes to a single node's DOM representation.
+
+- Widget decorations: insert a DOM node, which isn't part of the actual document, at a given position.
+
+- Inline decorations: add styling or attributes, much like node decorations, but to all inline nodes in a given range.
+
+与 slatejs 一样的，decorations 是每次渲染的时候都会刷新，代价是比较高的。
+
+### Node Views
+
+最直接的渲染方法
+
+```js
+let view = new EditorView({
+  state,
+  nodeViews: {
+    image(node, view, getPos) { return new ImageView(node, view, getPos) }
+  }
+})
+
+class ImageView {
+  constructor(node, view, getPos) {
+    this.dom = document.createElement("img")
+    this.dom.src = node.attrs.src
+    this.dom.alt = node.attrs.alt
+    this.dom.addEventListener("click", e => {
+      e.preventDefault()
+      let alt = prompt("New alt text:", "")
+      if (alt) {
+        view.dispatch(
+          view.state.tr.setNodeMarkup(
+            getPos(),
+            null,
+            {
+              src: node.attrs.src,
+              alt
+            }
+          )
+        )
+      }
+    })
+  }
+
+  stopEvent() { return true }
+}
+```
+
+## Commands
+
+用于菜单指令或者快捷键指令
+
+### Collaborative editing
+
+实时协作
+
+OP化后，这里需要一个中心节点(central authority)，当然这个中心节点可以是某一个用户。一般我们用 Server 来负责这个职责。
+
+- Track a current document version
+- Accept changes from editors, and when these can be applied, add them to its list of changes
+- Provide a way for editors to receive changes since a given version
