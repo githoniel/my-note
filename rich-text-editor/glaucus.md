@@ -54,7 +54,7 @@ const withImages = editor => {
 - `dirtyPath` 无法手动控制，无法指定刷新某些组件
 - 没有统一的事件，全部依赖于 `react`
 - 依赖多层级的 `contentEditable` 来控制 `selection` 落点(` hasEditableTarget`）
-- 如何
+- 出错直接崩溃
 
 ### glaucus
 
@@ -67,11 +67,45 @@ const withImages = editor => {
 实际开发中就发现两个 `hook` 需要融合，不得不给 `BailHook` 加了一个丑陋的 `updateParam` 函数。
 
 - 状态都丢在 `useContext` 里，实在太多，`react` 还会引发 useContext刷新问题
-- toolbar 中的指令缺乏抽象成command，导致书写困难
+- `toolbar` 中的指令缺乏抽象成 command，导致书写困难，而且使得快捷键必须依赖`toolbar`
 - 插件中间层似乎遗忘了对 `editor` 的扩展新函数，而是只扩展原有接口
 - `renderLeaf` / `renderElement` 的区分太过于绝对，需要跨组件就很蛋疼, 
 - 所有覆盖式函数，如果不创建组件，就无法使用 `hook`
 - 所有事件依赖 `react` 事件来实现，兼容性必须自己分开处理
+- `toolbar` 依赖于 `DOM` 的渲染
+
+#### 插件本身
+
+首先理想上的插件应该满足交换群的特性 - 交换律和结合律。实际上还是不太行，所以提供了以下辅助函数
+
+1. 检测函数，`hasPluin`
+2. 排序函数，`Before`, `after`
+3. 检测函数用于插件主动感知，也有被动感知
+
+目前检测可用性是依托于 `toolbar` 上的按钮或者下拉菜单，根据 `Element.closest` 方式实现
 
 #### glaucus-mark
 
+此类插件的实现原理是通过 `renderLeaf` 函数中 `attribute` 属性的修改实现
+
+```ts
+export interface RenderLeafProps {
+  children: any
+  leaf: Text
+  text: Text
+  attributes: {
+    'data-slate-leaf': true
+  } & {
+    style?: React.CSSProperties
+  }
+}
+
+type renderLeaf = (renderLeafProps: IRenderLeafProps) => any
+```
+
+当时考虑是为了DOM更加简洁一些，官网的`Demo`是通过 wrap 一层 DOM 来实现，和 `slatejs` 中类似。这两种方法都不完美
+
+1. 插件正交问题，两种都可能出现上下干扰的问题
+2. 插件次序问题，两种都可能出现因为插件次序不同而导致的不同结果
+
+#### asd
