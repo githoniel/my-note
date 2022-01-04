@@ -2,11 +2,11 @@
 
 无论开发 slatejs，还是开发 glaucus 并不是一件轻松的事情。
 
-## 设计问题
+# 设计问题
 
 指的是一些设计缺陷，导致书写起来并不舒服，有些是 slatejs 带来的，有些是插件中间层带来的。
 
-### slatejs
+## slatejs
 
 slatejs 分为四个库
 
@@ -15,7 +15,7 @@ slatejs 分为四个库
 - slate-hyperscript: jsx辅助包，其实没啥用
 - slate-react
 
-#### slate-core
+### slate-core
 
 - 插件采用函数覆盖式扩展
 
@@ -42,11 +42,11 @@ const withImages = editor => {
 - 序列化没自带实现
 - `schema` 缺乏 `global attr`
 
-#### slate-history
+### slate-history
 
 - 缺乏手动控制merge步骤的函数，`withoutMerging` / `withMerging` 等
 
-#### slate-react
+### slate-react
 
 - 多平台兼容问题
 - 生命周期依赖于 `react`，这个其实是 `react hook` 反 JS 的毛病引起的，`hook` 无法声明，触发在组件之外
@@ -56,9 +56,9 @@ const withImages = editor => {
 - 依赖多层级的 `contentEditable` 来控制 `selection` 落点(` hasEditableTarget`）
 - 出错直接崩溃
 
-### glaucus
+## glaucus
 
-#### `glaucus-plugin`
+### `glaucus-plugin`
 
 - `BailHook` / `WaterfallHook` 都不够好
 
@@ -74,7 +74,7 @@ const withImages = editor => {
 - 所有事件依赖 `react` 事件来实现，兼容性必须自己分开处理
 - `toolbar` 依赖于 `DOM` 的渲染
 
-#### 插件本身
+### 插件本身
 
 首先理想上的插件应该满足交换群的特性 - 交换律和结合律。实际上还是不太行，所以提供了以下辅助函数
 
@@ -84,7 +84,7 @@ const withImages = editor => {
 
 目前检测可用性是依托于 `toolbar` 上的按钮或者下拉菜单，根据 `Element.closest` 方式实现
 
-#### glaucus-mark
+### glaucus-mark
 
 此类插件的实现原理是通过 `renderLeaf` 函数中 `attribute` 属性的修改实现
 
@@ -103,9 +103,50 @@ export interface RenderLeafProps {
 type renderLeaf = (renderLeafProps: IRenderLeafProps) => any
 ```
 
-当时考虑是为了DOM更加简洁一些，官网的`Demo`是通过 wrap 一层 DOM 来实现，和 `slatejs` 中类似。这两种方法都不完美
+当时考虑是为了DOM更加简洁一些，官网的`Demo`是通过 wrap 一层 DOM 来实现，和 `slatejs` 中类似。这两种方法都不完美, 并没有解决插件正交问题。
 
-1. 插件正交问题，两种都可能出现上下干扰的问题
-2. 插件次序问题，两种都可能出现因为插件次序不同而导致的不同结果
+### glaucus-element
 
-#### asd
+这个渲染方式就是 wrap 一层DOM为主
+
+#### Void Element
+
+slatejs 对 `void` 的支持并不好, 尤其叠加 `inline` 的情况。
+
+1. `void` 元素隔绝靠的 `contentEditable`，无法区分手动设置的焦点值，而且对嵌套内容需要使用 slatejs 编辑时，就很难处理
+2. `void` 和 `inline` 结合，有一个 HTML 布局的问题
+
+```jsx
+<block>
+  <inline>asdasd</inline>
+  <block inline void>
+  <inline>asd<inline>
+<block>
+```
+
+其中第二个 `inline` 无法根据自身长度，出现半换行的渲染
+
+PS: 可以试试策略上禁止前后文字输入内容
+
+#### inline Element
+
+同样有样式问题，就是焦点的字体大小以及区域问题
+
+1. 焦点光标的高度问题
+2. 焦点光标的位置问题，上下对齐，间隔等
+
+### Table Element
+
+Table是一个比较复杂的功能, 其中性能也是一个要点
+
+1. 内外焦点事件 onBlur, onFocus处理
+2. 性能问题，hook的性能依赖于父子 block，不是父子很难处理
+3. contentEditable控制焦点的能力
+4. useContext带来的整体刷新问题
+
+### Async Element
+
+异步的问题是追踪，一个元素可以被任意移动，所以有几个选项
+
+1. 保持一个 `PathRef`, `PathRef.current` 不存在则认为被删除
+2. 锁定Path, 期间禁止移动
