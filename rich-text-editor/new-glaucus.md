@@ -50,6 +50,8 @@ interface EditorState extends Editor {
 
 意义何在 ？ `State` 用于各插件触发刷新
 
+//TODO 是否需要
+
 ### 扩展操作 `EditorTransform`
 
 ```ts
@@ -83,17 +85,27 @@ interface EditorAPI extends Editor {
 
 目前事件必须通过 `react` 处理
 
-#### 虚拟Selection和输入框
+#### 虚拟光标和输入框
 
 更好的实现选框控制，以及输入支持
+
+### Selection限制
+
+精确匹配，只允许文字选区
 
 #### 扩展状态
 
 控制内容是否受控，目前是依赖 `DOM` 检测。
 
+目前利用的是`contentEditable=false`内的`input/textArea`可以不受控的输入来实现不受控内容内的输入内容。
+
+也就是一个Tree中，需要包含结构 `可编辑 -> 不可编辑 -> 可编辑`
+
+在精确Text选区后这个依旧是需要的，用于 `contentEditable=true` 时依旧不受控的内容
+
 ```ts
 interface GlaucusEditorView extends Editor {
-  isEditorSelectable(editor: Editor, target: DomNode): boolean
+  isUnselectable(editor: Editor, target: DomNode): boolean
 }
 ```
 
@@ -101,7 +113,7 @@ interface GlaucusEditorView extends Editor {
 
 1. onPaste / onKeyDown / onFocus / onCompositionStart / onDOMBeforeInput 等一系列事件的前置判断条件
 2. onDOMSelectionChange 中同步 `selection` 到 `editor` 的条件
-3. useEffect 中， 同步 `editor.selection`到 DOM 的条件
+3. useEffect 中， 同步 `editor.selection` 到 DOM 的条件
 
 包含了 `editable` 所有的交互内容了
 
@@ -111,6 +123,29 @@ interface GlaucusEditorView extends Editor {
    - 对于 `onDOMSelectionChange` 要求 `isEditorSelectable && (hasEditableTarget || isTargetInsideVoid)`
    - 对于 `useEffect`, 要求同上
 
-实现方式
+参考实现如下
 
-// TODO key closet大法
+```ts
+export const SelectableKey = 'slate-not-selectable'
+
+function isEditorSelectable(editor: Editor, target: DomNode) {
+  const targetEl = isDOMElement(target)
+        ? target
+        : target.parentElement) as HTMLElement
+  return !targetEl.closest(SelectableKey)!
+}
+```
+
+是否要实现多层结构？比如 `可编辑 -> 不可编辑 -> 可编辑 -> 不可编辑 -> 可编辑`
+
+
+
+### Toolbar优化
+
+抽离 view/state
+
+### Plugin插件优化
+
+- function化
+- 提供刷新渲染的方法
+- bailHook优化
